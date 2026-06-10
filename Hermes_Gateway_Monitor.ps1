@@ -1,4 +1,6 @@
-$pythonw = "C:\Users\conta\AppData\Local\hermes\hermes-agent\venv\Scripts\pythonw.exe"
+# Dynamically resolve Hermes Home Directory (parent folder of this script's directory)
+$HermesHome = Split-Path -Parent $PSScriptRoot
+$pythonw = "$HermesHome\hermes-agent\venv\Scripts\pythonw.exe"
 $args = "-m hermes_cli.main gateway run"
 
 function Get-BatteryPercent {
@@ -9,17 +11,23 @@ function Get-BatteryPercent {
     return $bat.EstimatedChargeRemaining
 }
 
-# 1. Check battery once on startup
-$percent = Get-BatteryPercent
-if ($percent -lt 30) {
-    exit 0
+function Test-OnACPower {
+    $status = Get-CimInstance -Namespace root\wmi -ClassName BatteryStatus -ErrorAction SilentlyContinue
+    if ($null -ne $status) {
+        return $status.PowerOnline
+    }
+    $bat = Get-CimInstance Win32_Battery -ErrorAction SilentlyContinue
+    if ($null -eq $bat) {
+        return $true
+    }
+    return $false
 }
 
-# 2. Clean up stale locks (runs ONLY once at startup)
+# 1. Clean up stale locks (runs ONLY once at startup)
 $lockFiles = @(
-    "C:\Users\conta\AppData\Local\hermes\gateway.lock"
+    "$HermesHome\gateway.lock"
 )
-$locksDir = "C:\Users\conta\.local\state\hermes\gateway-locks"
+$locksDir = "$env:USERPROFILE\.local\state\hermes\gateway-locks"
 if (Test-Path $locksDir) {
     $lockFiles += Get-ChildItem -Path $locksDir -Filter "*.lock" -ErrorAction SilentlyContinue | Select-Object -ExpandProperty FullName
 }
@@ -50,34 +58,51 @@ foreach ($file in $lockFiles) {
     }
 }
 
-# 3. Environment Setup
-$env:HERMES_HOME = "C:\Users\conta\AppData\Local\hermes"
+# 2. Environment Setup
+$env:HERMES_HOME = $HermesHome
 $env:PYTHONIOENCODING = "utf-8"
 $env:HERMES_GATEWAY_DETACHED = "1"
-$env:VIRTUAL_ENV = "C:\Users\conta\AppData\Local\hermes\hermes-agent\venv"
+$env:VIRTUAL_ENV = "$HermesHome\hermes-agent\venv"
 
-# 4. Smart monitoring and spawning loop
+# 3. Smart monitoring and spawning loop
 $proc = $null
 
 while ($true) {
-    # Check battery
-    $percent = Get-BatteryPercent
-    if ($percent -lt 30) {
-        if ($null -ne $proc -and -not $proc.HasExited) {
-            $proc | Stop-Process -Force -ErrorAction SilentlyContinue
+    # Check battery (only if running on battery power)
+    $lowBattery = $false
+    if (-not (Test-OnACPower)) {
+        $percent = Get-BatteryPercent
+        if ($percent -lt 30) {
+            $lowBattery = $true
+            if ($null -ne $proc -and -not $proc.HasExited) {
+                $proc | Stop-Process -Force -ErrorAction SilentlyContinue
+            }
         }
-        break
     }
 
-    # Check if an installer or update process is running
+    if ($lowBattery) {
+        # Sleep and check again in the next iteration without running the gateway
+        Start-Sleep -Seconds 15
+        continue
+    }
+
+    # Check if an installer, update, or setup process is running to avoid locks
     $installerRunning = $false
     $setupProc = Get-Process -Name "hermes-setup" -ErrorAction SilentlyContinue
     if ($null -ne $setupProc) {
         $installerRunning = $true
     } else {
-        $psProcs = Get-CimInstance Win32_Process -Filter "Name = 'powershell.exe'" -ErrorAction SilentlyContinue
-        foreach ($ps in $psProcs) {
-            if ($ps.CommandLine -like "*install.ps1*") {
+        $procs = Get-CimInstance Win32_Process -ErrorAction SilentlyContinue
+        foreach ($p in $procs) {
+            if (($p.Name -eq "powershell.exe" -and $p.CommandLine -like "*install.ps1*") -or
+                ($p.Name -eq "hermes.exe" -and $p.CommandLine -like "*update*") -or
+                ($p.Name -match "python" -and $p.CommandLine -like "*main.py*update*") -or
+                ($p.Name -match "python" -and $p.CommandLine -like "*hermes_cli.main*update*") -or
+                ($p.Name -match "python" -and $p.CommandLine -like "*setup.py*") -or
+                ($p.Name -match "python" -and $p.CommandLine -like "*hermes_bootstrap.py*") -or
+                # Check if uv/pip is performing installation/sync on the Hermes codebase specifically
+                # (Ignores active MCP background servers like mcp-obsidian which run continuously)
+                (($p.Name -match "uv\.exe|uvw\.exe|uvx\.exe|pip\.exe|pip3\.exe") -and ($null -ne $p.CommandLine) -and ($p.CommandLine -match "hermes") -and ($p.CommandLine -match "install|update|upgrade|sync|pip|venv"))) {
                 $installerRunning = $true
                 break
             }
@@ -92,7 +117,13 @@ while ($true) {
     } else {
         # No installer running, ensure background gateway is running alongside the app
         if ($null -eq $proc -or $proc.HasExited) {
-            $proc = Start-Process -FilePath $pythonw -ArgumentList $args -PassThru -NoNewWindow -WorkingDirectory "C:\Users\conta\AppData\Local\hermes"
+            # Rotate previous output logs before writing new ones so crash tracebacks are not lost
+            $stdoutFile = "$HermesHome\logs\gateway-stdout.log"
+            $stderrFile = "$HermesHome\logs\gateway-stderr.log"
+            if (Test-Path $stdoutFile) { Move-Item -Path $stdoutFile -Destination "$HermesHome\logs\gateway-stdout.prev.log" -Force -ErrorAction SilentlyContinue }
+            if (Test-Path $stderrFile) { Move-Item -Path $stderrFile -Destination "$HermesHome\logs\gateway-stderr.prev.log" -Force -ErrorAction SilentlyContinue }
+
+            $proc = Start-Process -FilePath $pythonw -ArgumentList $args -PassThru -NoNewWindow -WorkingDirectory $HermesHome -RedirectStandardOutput $stdoutFile -RedirectStandardError $stderrFile
         }
     }
 
