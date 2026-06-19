@@ -1,0 +1,251 @@
+{
+  "nodes": [
+    {
+      "id": "logon",
+      "type": "text",
+      "text": "### 🏁 Windows Logon Event\nTriggers the service startup when the user logs into their Windows session.",
+      "x": 0,
+      "y": 0,
+      "width": 300,
+      "height": 110,
+      "color": "1"
+    },
+    {
+      "id": "scheduler",
+      "type": "text",
+      "text": "### ⚙️ Task Scheduler\nFires the `Hermes_Gateway` logon task under the user's interactive context (30-second delay).",
+      "x": 0,
+      "y": 170,
+      "width": 300,
+      "height": 110,
+      "color": "2"
+    },
+    {
+      "id": "vbs",
+      "type": "text",
+      "text": "### 📄 Hermes_Gateway.vbs\nLaunches the PowerShell watchdog in windowless style (`WindowStyle = 0`) to keep execution completely hidden.",
+      "x": 0,
+      "y": 340,
+      "width": 300,
+      "height": 120,
+      "color": "2"
+    },
+    {
+      "id": "coordinator",
+      "type": "text",
+      "text": "### 🧠 Hermes_Gateway_Monitor.ps1\nThe main watchdog coordinator. Dot-sources all helper modules from the `utils/` directory.",
+      "x": 0,
+      "y": 520,
+      "width": 300,
+      "height": 110,
+      "color": "5"
+    },
+    {
+      "id": "cleanup",
+      "type": "text",
+      "text": "### 🧹 LockCleanup.ps1\nExecuted once on startup. Verifies running PIDs using WMI to clean up stale locks safely.",
+      "x": 0,
+      "y": 690,
+      "width": 300,
+      "height": 110,
+      "color": "6"
+    },
+    {
+      "id": "env_setup",
+      "type": "text",
+      "text": "### 📦 Environment Setup\nConfigures critical environment variables: `HERMES_HOME`, `PYTHONIOENCODING`, and `VIRTUAL_ENV`.",
+      "x": 0,
+      "y": 860,
+      "width": 300,
+      "height": 110,
+      "color": "6"
+    },
+    {
+      "id": "adopt_startup",
+      "type": "text",
+      "text": "### 🔄 Startup Adoption\nChecks `gateway.lock` for active Python processes. If a running gateway is found, adopts it directly.",
+      "x": 0,
+      "y": 1030,
+      "width": 300,
+      "height": 110,
+      "color": "4"
+    },
+    {
+      "id": "notify_start",
+      "type": "text",
+      "text": "### 🔔 Custom Hermes Gateway Notification\nTriggers native notification showing that the Custom Watchdog service is active.",
+      "x": 0,
+      "y": 1200,
+      "width": 300,
+      "height": 110,
+      "color": "4"
+    },
+    {
+      "id": "loop_start",
+      "type": "text",
+      "text": "### 🔁 Loop Start\nEvaluates system state and gateway health every 15 seconds.",
+      "x": 0,
+      "y": 1370,
+      "width": 300,
+      "height": 90,
+      "color": "5"
+    },
+    {
+      "id": "power_check",
+      "type": "text",
+      "text": "### 🔋 Power Check\nQueries charge via [PowerUtils.ps1](file:///C:/Users/conta/AppData/Local/hermes/custom-gateway-service/utils/PowerUtils.ps1). Calculates average for dual-battery setups. If running on battery and **charge < 30%**, triggers suspend.",
+      "x": -400,
+      "y": 1510,
+      "width": 300,
+      "height": 150,
+      "color": "1"
+    },
+    {
+      "id": "install_check",
+      "type": "text",
+      "text": "### 🛠️ Installer Check\nScans active processes via [ProcessUtils.ps1](file:///C:/Users/conta/AppData/Local/hermes/custom-gateway-service/utils/ProcessUtils.ps1). If `pip`, `uv`, or `install.ps1` are running, pauses gateway to avoid file locks.",
+      "x": 0,
+      "y": 1510,
+      "width": 300,
+      "height": 150,
+      "color": "2"
+    },
+    {
+      "id": "net_check",
+      "type": "text",
+      "text": "### 🌐 Internet Check\nChecks connection via [NetworkUtils.ps1](file:///C:/Users/conta/AppData/Local/hermes/custom-gateway-service/utils/NetworkUtils.ps1). Performs fallback queries to Google/Cloudflare DNS to verify online status.",
+      "x": 400,
+      "y": 1510,
+      "width": 300,
+      "height": 150,
+      "color": "3"
+    },
+    {
+      "id": "power_suspend",
+      "type": "text",
+      "text": "### 🪫 Suspend: Low Battery\nTerminates all running python processes from the virtual environment path, triggers notification, and sleeps 15s.",
+      "x": -400,
+      "y": 1720,
+      "width": 300,
+      "height": 130,
+      "color": "1"
+    },
+    {
+      "id": "install_suspend",
+      "type": "text",
+      "text": "### ⏸️ Suspend: Install Run\nKills the active gateway, frees file locks to let update finish, triggers notification, and sleeps 15s.",
+      "x": 0,
+      "y": 1720,
+      "width": 300,
+      "height": 130,
+      "color": "2"
+    },
+    {
+      "id": "net_suspend",
+      "type": "text",
+      "text": "### 📴 Suspend: Offline\nHalts the gateway to prevent endless telegram connection timeout errors, sends notification, and sleeps 15s.",
+      "x": 400,
+      "y": 1720,
+      "width": 300,
+      "height": 130,
+      "color": "3"
+    },
+    {
+      "id": "active_check",
+      "type": "text",
+      "text": "### 🔍 Gateway Health Check\nChecks if the process is running and evaluates resource limits.",
+      "x": 0,
+      "y": 1910,
+      "width": 300,
+      "height": 90,
+      "color": "5"
+    },
+    {
+      "id": "resource_check",
+      "type": "text",
+      "text": "### 📊 Resource Limits\nIf gateway runs but breaches limits (RAM > 500MB or CPU > 85% for 1m consecutive ticks), triggers Auto-Heal restart.",
+      "x": -400,
+      "y": 2060,
+      "width": 300,
+      "height": 140,
+      "color": "1"
+    },
+    {
+      "id": "crash_check",
+      "type": "text",
+      "text": "### 💥 Spawn & Crash Check\nIf gateway is dead, increments crash count. If consecutive crashes >= 3, applies exponential backoff delay (up to 5m).",
+      "x": 400,
+      "y": 2060,
+      "width": 300,
+      "height": 140,
+      "color": "2"
+    },
+    {
+      "id": "log_rotate",
+      "type": "text",
+      "text": "### 📝 Log Rotation\nSafely copies active logs to `.prev.log` and truncates the originals to prevent 'file locked' errors.",
+      "x": 400,
+      "y": 2260,
+      "width": 300,
+      "height": 110,
+      "color": "6"
+    },
+    {
+      "id": "spawn_proc",
+      "type": "text",
+      "text": "### 🚀 Spawn & Adopt\nSpawns `pythonw.exe` shim. Waits 3s for startup, then adopts the actual worker `python.exe` PID from the lock file.",
+      "x": 400,
+      "y": 2430,
+      "width": 300,
+      "height": 130,
+      "color": "4"
+    },
+    {
+      "id": "loop_sleep",
+      "type": "text",
+      "text": "### 💤 Loop Sleep\nSleeps for 15 seconds before beginning the next check.",
+      "x": 0,
+      "y": 2620,
+      "width": 300,
+      "height": 90,
+      "color": "5"
+    }
+  ],
+  "edges": [
+    {"id": "e1", "fromNode": "logon", "fromSide": "bottom", "toNode": "scheduler", "toSide": "top"},
+    {"id": "e2", "fromNode": "scheduler", "fromSide": "bottom", "toNode": "vbs", "toSide": "top"},
+    {"id": "e3", "fromNode": "vbs", "fromSide": "bottom", "toNode": "coordinator", "toSide": "top"},
+    {"id": "e4", "fromNode": "coordinator", "fromSide": "bottom", "toNode": "cleanup", "toSide": "top"},
+    {"id": "e5", "fromNode": "cleanup", "fromSide": "bottom", "toNode": "env_setup", "toSide": "top"},
+    {"id": "e6", "fromNode": "env_setup", "fromSide": "bottom", "toNode": "adopt_startup", "toSide": "top"},
+    {"id": "e7", "fromNode": "adopt_startup", "fromSide": "bottom", "toNode": "notify_start", "toSide": "top"},
+    {"id": "e8", "fromNode": "notify_start", "fromSide": "bottom", "toNode": "loop_start", "toSide": "top"},
+    
+    {"id": "e9", "fromNode": "loop_start", "fromSide": "left", "toNode": "power_check", "toSide": "top"},
+    {"id": "e10", "fromNode": "loop_start", "fromSide": "bottom", "toNode": "install_check", "toSide": "top"},
+    {"id": "e11", "fromNode": "loop_start", "fromSide": "right", "toNode": "net_check", "toSide": "top"},
+    
+    {"id": "e12", "fromNode": "power_check", "fromSide": "bottom", "toNode": "power_suspend", "toSide": "top", "label": "Charge < 30%"},
+    {"id": "e13", "fromNode": "install_check", "fromSide": "bottom", "toNode": "install_suspend", "toSide": "top", "label": "Setup Active"},
+    {"id": "e14", "fromNode": "net_check", "fromSide": "bottom", "toNode": "net_suspend", "toSide": "top", "label": "Offline"},
+    
+    {"id": "e15", "fromNode": "power_suspend", "fromSide": "bottom", "toNode": "loop_sleep", "toSide": "left"},
+    {"id": "e16", "fromNode": "install_suspend", "fromSide": "bottom", "toNode": "loop_sleep", "toSide": "top"},
+    {"id": "e17", "fromNode": "net_suspend", "fromSide": "bottom", "toNode": "loop_sleep", "toSide": "right"},
+    
+    {"id": "e18", "fromNode": "power_check", "fromSide": "right", "toNode": "active_check", "toSide": "top", "label": "Healthy"},
+    {"id": "e19", "fromNode": "install_check", "fromSide": "bottom", "toNode": "active_check", "toSide": "top", "label": "None"},
+    {"id": "e20", "fromNode": "net_check", "fromSide": "left", "toNode": "active_check", "toSide": "top", "label": "Online"},
+    
+    {"id": "e21", "fromNode": "active_check", "fromSide": "left", "toNode": "resource_check", "toSide": "top", "label": "Running"},
+    {"id": "e22", "fromNode": "active_check", "fromSide": "right", "toNode": "crash_check", "toSide": "top", "label": "Dead / Stopped"},
+    
+    {"id": "e23", "fromNode": "resource_check", "fromSide": "bottom", "toNode": "loop_sleep", "toSide": "left"},
+    
+    {"id": "e24", "fromNode": "crash_check", "fromSide": "bottom", "toNode": "log_rotate", "toSide": "top"},
+    {"id": "e25", "fromNode": "log_rotate", "fromSide": "bottom", "toNode": "spawn_proc", "toSide": "top"},
+    {"id": "e26", "fromNode": "spawn_proc", "fromSide": "bottom", "toNode": "loop_sleep", "toSide": "right"},
+    
+    {"id": "e27", "fromNode": "loop_sleep", "fromSide": "bottom", "toNode": "loop_start", "toSide": "bottom"}
+  ]
+}

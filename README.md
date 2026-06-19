@@ -65,3 +65,62 @@ This repository adopts the **GitHub Flow** strategy to coordinate releases and t
    git merge development
    git push origin main
    ```
+
+---
+
+## 🔧 Troubleshooting & Manual Control
+
+If you need to check on the watchdog or manually manage the gateway, use the following PowerShell commands:
+
+### Query Watchdog Process & Task Status:
+```powershell
+# Get active powershell watchdog process
+Get-CimInstance Win32_Process -Filter "Name = 'powershell.exe'" | Where-Object { $_.CommandLine -like "*Hermes_Gateway_Monitor*" } | Select-Object ProcessId, CommandLine
+
+# Check Scheduled Task Status
+Get-ScheduledTask -TaskName "Hermes_Gateway" | Get-ScheduledTaskInfo
+```
+
+### Manually Start / Stop the Watchdog:
+```powershell
+# Start the hidden watchdog service
+Start-ScheduledTask -TaskName "Hermes_Gateway"
+
+# Stop the watchdog service (Note: You must also terminate the running powershell process)
+Stop-ScheduledTask -TaskName "Hermes_Gateway"
+Get-CimInstance Win32_Process -Filter "Name = 'powershell.exe'" | Where-Object { $_.CommandLine -like "*Hermes_Gateway_Monitor*" } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force }
+```
+
+### Read Active Runtime Logs:
+```powershell
+# View stdout log contents
+Get-Content -Path "$env:LOCALAPPDATA\hermes\custom-gateway-service\logs\gateway-stdout.log" -Tail 50 -ErrorAction SilentlyContinue
+
+# View stderr log contents (contains python errors/warnings)
+Get-Content -Path "$env:LOCALAPPDATA\hermes\custom-gateway-service\logs\gateway-stderr.log" -Tail 50 -ErrorAction SilentlyContinue
+```
+
+---
+
+## 🔬 Testing Utilities Locally
+
+Each module in `utils/` is isolated and can be tested individually in a local PowerShell session:
+
+```powershell
+# Navigate to the service directory
+cd "$env:LOCALAPPDATA\hermes\custom-gateway-service"
+
+# Test Toast Notifications:
+. .\utils\NotificationUtils.ps1
+Show-Notification -Title "Test Banner" -Message "Hello from custom identity!"
+
+# Test Internet Connectivity check:
+. .\utils\NetworkUtils.ps1
+Test-InternetConnection
+
+# Test Battery levels:
+. .\utils\PowerUtils.ps1
+Get-BatteryPercent
+Test-OnACPower
+```
+
