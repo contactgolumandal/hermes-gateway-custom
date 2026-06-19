@@ -3,13 +3,13 @@ $HermesHome = Split-Path -Parent $PSScriptRoot
 $pythonw = "$HermesHome\hermes-agent\venv\Scripts\pythonw.exe"
 $args = "-m hermes_cli.main gateway run"
 
-# Dot-source the modular utility scripts
-. (Join-Path $PSScriptRoot "PowerUtils.ps1")
-. (Join-Path $PSScriptRoot "LockCleanup.ps1")
-. (Join-Path $PSScriptRoot "ProcessUtils.ps1")
-. (Join-Path $PSScriptRoot "NotificationUtils.ps1")
-. (Join-Path $PSScriptRoot "ResourceUtils.ps1")
-. (Join-Path $PSScriptRoot "NetworkUtils.ps1")
+# Dot-source the modular utility scripts from the utils folder
+. (Join-Path $PSScriptRoot "utils\PowerUtils.ps1")
+. (Join-Path $PSScriptRoot "utils\LockCleanup.ps1")
+. (Join-Path $PSScriptRoot "utils\ProcessUtils.ps1")
+. (Join-Path $PSScriptRoot "utils\NotificationUtils.ps1")
+. (Join-Path $PSScriptRoot "utils\ResourceUtils.ps1")
+. (Join-Path $PSScriptRoot "utils\NetworkUtils.ps1")
 
 # 1. Clean up stale locks (runs ONLY once at startup)
 Clear-StaleLocks -HermesHome $HermesHome
