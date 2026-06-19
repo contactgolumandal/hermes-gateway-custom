@@ -81,6 +81,12 @@ while ($true) {
     }
 
     if ($lowBattery) {
+        if ($null -ne $proc -and -not $proc.HasExited) {
+            $proc | Stop-Process -Force -ErrorAction SilentlyContinue
+        }
+        # Forcefully terminate any running processes from the Hermes virtual environment to conserve battery
+        Get-Process -ErrorAction SilentlyContinue | Where-Object { $_.Path -like "$HermesHome\hermes-agent\venv\*" } | Stop-Process -Force -ErrorAction SilentlyContinue
+        
         # Sleep and check again in the next iteration without running the gateway
         Start-Sleep -Seconds 15
         continue
@@ -94,7 +100,7 @@ while ($true) {
     } else {
         $procs = Get-CimInstance Win32_Process -ErrorAction SilentlyContinue
         foreach ($p in $procs) {
-            if (($p.Name -eq "powershell.exe" -and $p.CommandLine -like "*install.ps1*") -or
+            if (($p.Name -eq "powershell.exe" -and $p.CommandLine -like "*install*.ps1*") -or
                 ($p.Name -eq "hermes.exe" -and $p.CommandLine -like "*update*") -or
                 ($p.Name -match "python" -and $p.CommandLine -like "*main.py*update*") -or
                 ($p.Name -match "python" -and $p.CommandLine -like "*hermes_cli.main*update*") -or
@@ -114,6 +120,8 @@ while ($true) {
         if ($null -ne $proc -and -not $proc.HasExited) {
             $proc | Stop-Process -Force -ErrorAction SilentlyContinue
         }
+        # Aggressively terminate any other processes running from the Hermes virtual environment
+        Get-Process -ErrorAction SilentlyContinue | Where-Object { $_.Path -like "$HermesHome\hermes-agent\venv\*" } | Stop-Process -Force -ErrorAction SilentlyContinue
     } else {
         # No installer running, ensure background gateway is running alongside the app
         if ($null -eq $proc -or $proc.HasExited) {
