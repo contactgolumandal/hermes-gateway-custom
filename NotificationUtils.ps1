@@ -4,7 +4,7 @@ try {
     if (!(Test-Path $regPath)) {
         New-Item -Path $regPath -Force | Out-Null
     }
-    Set-ItemProperty -Path $regPath -Name "DisplayName" -Value "Hermes Gateway" -Type String -ErrorAction SilentlyContinue
+    Set-ItemProperty -Path $regPath -Name "DisplayName" -Value "Custom Hermes Gateway" -Type String -ErrorAction SilentlyContinue
     Set-ItemProperty -Path $regPath -Name "ShowInSettings" -Value 1 -Type DWord -ErrorAction SilentlyContinue
 } catch {
     # Ignore registration errors (fails silently if registry is locked or unavailable)
