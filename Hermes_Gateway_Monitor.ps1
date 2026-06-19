@@ -20,6 +20,14 @@ $env:PYTHONIOENCODING = "utf-8"
 $env:HERMES_GATEWAY_DETACHED = "1"
 $env:VIRTUAL_ENV = "$HermesHome\hermes-agent\venv"
 
+# 2.1 Set up local logs directory
+$CustomLogsDir = Join-Path $PSScriptRoot "logs"
+if (-not (Test-Path $CustomLogsDir)) {
+    New-Item -ItemType Directory -Path $CustomLogsDir -Force | Out-Null
+}
+$stdoutFile = Join-Path $CustomLogsDir "gateway-stdout.log"
+$stderrFile = Join-Path $CustomLogsDir "gateway-stderr.log"
+
 # 3. Smart monitoring and spawning loop variables
 $proc = $null
 $consecutiveCrashes = 0
@@ -27,6 +35,25 @@ $lastLaunchTime = $null
 $isOffline = $false
 $isSuspendedLowBattery = $false
 $isSuspendedInstaller = $false
+
+# 3.1 Adopt an already running gateway process if it exists
+$lockFile = Join-Path $HermesHome "gateway.lock"
+if (Test-Path $lockFile) {
+    try {
+        $content = Get-Content $lockFile -Raw -ErrorAction SilentlyContinue
+        if ($content) {
+            $json = ConvertFrom-Json $content -ErrorAction SilentlyContinue
+            if ($json -and $json.pid) {
+                $existingProc = Get-Process -Id $json.pid -ErrorAction SilentlyContinue
+                if ($null -ne $existingProc -and $existingProc.ProcessName -match "python") {
+                    $proc = $existingProc
+                    $lastLaunchTime = Get-Date
+                    Show-Notification -Title "Hermes Watchdog" -Message "Adopted existing running gateway (PID $($proc.Id))."
+                }
+            }
+        }
+    } catch {}
+}
 
 Show-Notification -Title "Hermes Gateway Watchdog" -Message "Service started successfully."
 
@@ -130,14 +157,43 @@ while ($true) {
             }
         }
 
-        # Rotate previous output logs before writing new ones
-        $stdoutFile = "$HermesHome\logs\gateway-stdout.log"
-        $stderrFile = "$HermesHome\logs\gateway-stderr.log"
-        if (Test-Path $stdoutFile) { Move-Item -Path $stdoutFile -Destination "$HermesHome\logs\gateway-stdout.prev.log" -Force -ErrorAction SilentlyContinue }
-        if (Test-Path $stderrFile) { Move-Item -Path $stderrFile -Destination "$HermesHome\logs\gateway-stderr.prev.log" -Force -ErrorAction SilentlyContinue }
+        # Rotate previous output logs before writing new ones safely
+        if (Test-Path $stdoutFile) {
+            try {
+                Get-Content $stdoutFile -Raw -ErrorAction SilentlyContinue | Out-File -FilePath "$CustomLogsDir\gateway-stdout.prev.log" -Force -Encoding utf8 -ErrorAction SilentlyContinue
+                Clear-Content $stdoutFile -ErrorAction SilentlyContinue
+            } catch {}
+        }
+        if (Test-Path $stderrFile) {
+            try {
+                Get-Content $stderrFile -Raw -ErrorAction SilentlyContinue | Out-File -FilePath "$CustomLogsDir\gateway-stderr.prev.log" -Force -Encoding utf8 -ErrorAction SilentlyContinue
+                Clear-Content $stderrFile -ErrorAction SilentlyContinue
+            } catch {}
+        }
 
         $lastLaunchTime = Get-Date
-        $proc = Start-Process -FilePath $pythonw -ArgumentList $args -PassThru -NoNewWindow -WorkingDirectory $HermesHome -RedirectStandardOutput $stdoutFile -RedirectStandardError $stderrFile
+        $shimProc = Start-Process -FilePath $pythonw -ArgumentList $args -PassThru -NoNewWindow -WorkingDirectory $HermesHome -RedirectStandardOutput $stdoutFile -RedirectStandardError $stderrFile
+        
+        # Wait a moment for the gateway to initialize and write its lock file
+        Start-Sleep -Seconds 3
+        
+        # Adopt the actual running python.exe process for resource monitoring
+        $proc = $shimProc
+        $lockFile = Join-Path $HermesHome "gateway.lock"
+        if (Test-Path $lockFile) {
+            try {
+                $content = Get-Content $lockFile -Raw -ErrorAction SilentlyContinue
+                if ($content) {
+                    $json = ConvertFrom-Json $content -ErrorAction SilentlyContinue
+                    if ($json -and $json.pid) {
+                        $actualProc = Get-Process -Id $json.pid -ErrorAction SilentlyContinue
+                        if ($null -ne $actualProc -and $actualProc.ProcessName -match "python") {
+                            $proc = $actualProc
+                        }
+                    }
+                }
+            } catch {}
+        }
         
         if ($consecutiveCrashes -eq 0) {
             Show-Notification -Title "Hermes Online" -Message "Gateway started successfully."
