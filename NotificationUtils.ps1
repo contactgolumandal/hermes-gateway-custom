@@ -1,3 +1,15 @@
+# Register the custom Application User Model ID (AUMID) for notifications in HKCU
+try {
+    $regPath = "HKCU:\Software\Classes\AppUserModelId\Hermes.Gateway"
+    if (!(Test-Path $regPath)) {
+        New-Item -Path $regPath -Force | Out-Null
+    }
+    Set-ItemProperty -Path $regPath -Name "DisplayName" -Value "Hermes Gateway" -Type String -ErrorAction SilentlyContinue
+    Set-ItemProperty -Path $regPath -Name "ShowInSettings" -Value 1 -Type DWord -ErrorAction SilentlyContinue
+} catch {
+    # Ignore registration errors (fails silently if registry is locked or unavailable)
+}
+
 function Show-Notification {
     param (
         [string]$Title,
@@ -17,8 +29,8 @@ function Show-Notification {
         $textNodes.Item(0).AppendChild($xml.CreateTextNode($Title)) | Out-Null
         $textNodes.Item(1).AppendChild($xml.CreateTextNode($Message)) | Out-Null
 
-        # Use standard PowerShell AppId to display the toast cleanly
-        $appId = "{1AC14E77-C6E7-43BF-86A5-3C885B4903D8}\PowerShell\v1.0\powershell.exe"
+        # Use our custom registered AppId to display "Hermes Gateway"
+        $appId = "Hermes.Gateway"
 
         # Show Notification
         $toast = [Windows.UI.Notifications.ToastNotification]::new($xml)
