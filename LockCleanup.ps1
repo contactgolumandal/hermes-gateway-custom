@@ -24,7 +24,13 @@ function Clear-StaleLocks {
                         $proc = Get-Process -Id $pidVal -ErrorAction SilentlyContinue
                         if ($null -eq $proc) {
                             Remove-Item $file -Force -ErrorAction SilentlyContinue
-                        } elseif ($proc.ProcessName -notmatch "python") {
+                        } elseif ($proc.ProcessName -match "python") {
+                            # Verify command line to prevent false matches due to recycled process IDs
+                            $cmdLine = (Get-CimInstance Win32_Process -Filter "ProcessId = $pidVal" -ErrorAction SilentlyContinue).CommandLine
+                            if ($null -eq $cmdLine -or $cmdLine -notmatch "hermes") {
+                                Remove-Item $file -Force -ErrorAction SilentlyContinue
+                            }
+                        } else {
                             Remove-Item $file -Force -ErrorAction SilentlyContinue
                         }
                     }
