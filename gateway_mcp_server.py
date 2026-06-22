@@ -4,6 +4,7 @@ import json
 import re
 import subprocess
 from pathlib import Path
+from collections import deque
 import psutil
 from mcp.server.fastmcp import FastMCP
 
@@ -45,12 +46,19 @@ def get_running_watchdogs() -> dict:
                             profile = cmdline[i + 1]
                             break
                     else:
-                        # Match custom profile name in command line if named argument is missing
-                        for p in custom_profiles:
-                            pattern = rf"\b{re.escape(p)}\b"
-                            if re.search(pattern, cmd_str, re.IGNORECASE):
-                                profile = p
+                        # Scan only arguments following the script file name to avoid path false positives
+                        script_idx = -1
+                        for idx, arg in enumerate(cmdline):
+                            if "Hermes_Gateway_Monitor" in arg:
+                                script_idx = idx
                                 break
+                        if script_idx != -1:
+                            args_str = " ".join(cmdline[script_idx + 1:])
+                            for p in custom_profiles:
+                                pattern = rf"\b{re.escape(p)}\b"
+                                if re.search(pattern, args_str, re.IGNORECASE):
+                                    profile = p
+                                    break
                     watchdogs[profile] = {
                         "pid": proc.info['pid'],
                         "cmdline": cmdline
@@ -118,6 +126,11 @@ def list_profiles() -> str:
 @mcp.tool()
 def start_gateway(profile_name: str) -> str:
     """Start the gateway and watchdog monitor for a specific profile."""
+    if profile_name != "default":
+        profile_dir = PROFILES_DIR / profile_name
+        if not profile_dir.exists() or not profile_dir.is_dir():
+            return f"Error: Profile '{profile_name}' does not exist under {PROFILES_DIR}."
+
     running_watchdogs = get_running_watchdogs()
     status = get_profile_status(profile_name, running_watchdogs)
     
@@ -235,10 +248,9 @@ def get_gateway_logs(profile_name: str, lines: int = 50) -> str:
         if not path.exists():
             return f"--- {label} log ({path.name}) does not exist yet ---"
         try:
-            # Read last N lines
-            content = path.read_text(encoding="utf-8", errors="ignore")
-            file_lines = content.splitlines()
-            tail_lines = file_lines[-lines:] if len(file_lines) > lines else file_lines
+            # Memory-safe tail read using deque
+            with open(path, "r", encoding="utf-8", errors="ignore") as f:
+                tail_lines = [line.rstrip("\r\n") for line in deque(f, maxlen=lines)]
             return f"=== {label} LOG ({path.name}) ===\n" + "\n".join(tail_lines)
         except Exception as e:
             return f"--- Error reading {label} log: {str(e)} ---"
@@ -257,6 +269,8 @@ def suspend_all_gateways(token: str = None) -> str:
     import random
     
     suspend_file = SERVICE_DIR / ".suspend"
+    if suspend_file.exists():
+        return "Gateways are already suspended (.suspend file exists)."
     
     # 1. No token provided - generate one
     if not token:

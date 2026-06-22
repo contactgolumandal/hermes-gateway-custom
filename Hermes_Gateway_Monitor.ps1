@@ -19,10 +19,16 @@ $watchdogProcs = Get-CimInstance Win32_Process -Filter "Name = 'powershell.exe'"
 } | ForEach-Object {
     $cmd = $_.CommandLine
     
+    # Get the portion of the command line that follows the script filename to avoid folder false-positives
+    $argsPart = ""
+    if ($cmd -match 'Hermes_Gateway_Monitor\.ps1["'']?\s+(.*)$') {
+        $argsPart = $Matches[1]
+    }
+    
     # Detect which profile this powershell process belongs to
     $detectedProfile = "default"
     foreach ($p in $customProfiles) {
-        if ($cmd -match "\b" + [Regex]::Escape($p) + "\b") {
+        if ($argsPart -match "\b" + [Regex]::Escape($p) + "\b") {
             $detectedProfile = $p
             break
         }
