@@ -145,6 +145,10 @@ def list_profiles() -> str:
 @mcp.tool()
 def start_gateway(profile_name: str) -> str:
     """Start the gateway and watchdog monitor for a specific profile."""
+    suspend_file = SERVICE_DIR / ".suspend"
+    if suspend_file.exists():
+        return "Cannot start gateway: Global suspension is active (.suspend file exists). Please clear the suspension first using the 'resume_all_gateways' tool."
+
     if profile_name != "default":
         profile_dir = PROFILES_DIR / profile_name
         if not profile_dir.exists() or not profile_dir.is_dir():
