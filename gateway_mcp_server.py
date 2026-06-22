@@ -44,8 +44,9 @@ def get_running_watchdogs() -> dict:
     custom_profiles = []
     if PROFILES_DIR.exists():
         for item in PROFILES_DIR.iterdir():
-            if item.is_dir():
-                custom_profiles.append(item.name)
+            if item.is_dir() and not item.name.startswith(".") and not item.name.startswith("__"):
+                if (item / "config.yaml").exists() or (item / ".env").exists():
+                    custom_profiles.append(item.name)
 
     watchdogs = {}
     for proc in psutil.process_iter(['pid', 'name', 'cmdline']):
@@ -126,8 +127,9 @@ def list_profiles() -> str:
     profiles = ["default"]
     if PROFILES_DIR.exists():
         for item in PROFILES_DIR.iterdir():
-            if item.is_dir():
-                profiles.append(item.name)
+            if item.is_dir() and not item.name.startswith(".") and not item.name.startswith("__"):
+                if (item / "config.yaml").exists() or (item / ".env").exists():
+                    profiles.append(item.name)
                 
     running_watchdogs = get_running_watchdogs()
     results = []
@@ -151,8 +153,8 @@ def start_gateway(profile_name: str) -> str:
 
     if profile_name != "default":
         profile_dir = PROFILES_DIR / profile_name
-        if not profile_dir.exists() or not profile_dir.is_dir():
-            return f"Error: Profile '{profile_name}' does not exist under {PROFILES_DIR}."
+        if not profile_dir.exists() or not profile_dir.is_dir() or not ((profile_dir / "config.yaml").exists() or (profile_dir / ".env").exists()):
+            return f"Error: Profile '{profile_name}' is not a valid Hermes profile (must contain config.yaml or .env under {PROFILES_DIR})."
 
     running_watchdogs = get_running_watchdogs()
     status = get_profile_status(profile_name, running_watchdogs)
@@ -268,8 +270,8 @@ def get_gateway_logs(profile_name: str, lines: int = 50) -> str:
     # 1. Profile Verification: Ensure profile directory exists if it is not default
     if profile_name != "default":
         profile_dir = PROFILES_DIR / profile_name
-        if not profile_dir.exists() or not profile_dir.is_dir():
-            return f"Error: Profile '{profile_name}' does not exist under {PROFILES_DIR}."
+        if not profile_dir.exists() or not profile_dir.is_dir() or not ((profile_dir / "config.yaml").exists() or (profile_dir / ".env").exists()):
+            return f"Error: Profile '{profile_name}' is not a valid Hermes profile (must contain config.yaml or .env under {PROFILES_DIR})."
 
     # 2. Logs Folder Verification: Ensure central logs directory exists
     log_dir = SERVICE_DIR / "logs"

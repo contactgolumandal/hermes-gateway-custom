@@ -11,7 +11,9 @@ $myPid = $PID
 $customProfiles = @()
 $profilesDir = Join-Path $HermesHome "profiles"
 if (Test-Path $profilesDir) {
-    $customProfiles = Get-ChildItem -Path $profilesDir -Directory -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Name
+    $customProfiles = Get-ChildItem -Path $profilesDir -Directory -ErrorAction SilentlyContinue | Where-Object {
+        (Test-Path (Join-Path $_.FullName "config.yaml")) -or (Test-Path (Join-Path $_.FullName ".env"))
+    } | Select-Object -ExpandProperty Name
 }
 
 $watchdogProcs = Get-CimInstance Win32_Process -Filter "Name = 'powershell.exe'" -ErrorAction SilentlyContinue | Where-Object {
