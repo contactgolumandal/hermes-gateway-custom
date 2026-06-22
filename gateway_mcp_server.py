@@ -265,8 +265,17 @@ def stop_gateway(profile_name: str) -> str:
 @mcp.tool()
 def get_gateway_logs(profile_name: str, lines: int = 50) -> str:
     """Retrieve the latest stdout and stderr logs for a profile's gateway."""
+    # 1. Profile Verification: Ensure profile directory exists if it is not default
+    if profile_name != "default":
+        profile_dir = PROFILES_DIR / profile_name
+        if not profile_dir.exists() or not profile_dir.is_dir():
+            return f"Error: Profile '{profile_name}' does not exist under {PROFILES_DIR}."
+
+    # 2. Logs Folder Verification: Ensure central logs directory exists
     log_dir = SERVICE_DIR / "logs"
-    
+    if not log_dir.exists() or not log_dir.is_dir():
+        return "--- No logs have been generated yet (logs directory does not exist) ---"
+        
     if profile_name == "default":
         stdout_path = log_dir / "gateway-stdout.log"
         stderr_path = log_dir / "gateway-stderr.log"
