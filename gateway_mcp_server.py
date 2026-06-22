@@ -378,7 +378,15 @@ def resume_all_gateways() -> str:
         return "Gateways are not currently suspended."
     try:
         suspend_file.unlink()
-        return f"Successfully removed suspension switch at {suspend_file}. Running watchdogs will resume gateway processes automatically on their next tick."
+        warning = ""
+        try:
+            running_watchdogs = get_running_watchdogs()
+            default_status = get_profile_status("default", running_watchdogs)
+            if not default_status["watchdog_running"]:
+                warning = " (Warning: The default watchdog is not currently running. You will need to start it manually to resume the services.)"
+        except Exception:
+            pass
+        return f"Successfully removed suspension switch at {suspend_file}." + warning + " Running watchdogs will resume gateway processes automatically on their next tick."
     except Exception as e:
         return f"Failed to clear suspension: {str(e)}"
 
