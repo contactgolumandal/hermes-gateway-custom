@@ -1,2 +1,6 @@
 # Exclude local runtime logs
 logs/
+
+# Exclude python cache files
+__pycache__/
+*.pyc

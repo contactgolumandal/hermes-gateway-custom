@@ -1,78 +1,74 @@
 # Hermes Gateway Custom Launcher & Watchdog
 
-A modular, silent background launcher and battery-aware watchdog script for the Hermes Agent messaging gateway on Windows.
+A modular, silent background launcher, battery-aware watchdog, and MCP management service for the Hermes Agent messaging gateway on Windows.
 
 ## 🚀 Features
 
-1. **Silent Background Execution:** Uses a VBScript wrapper (`Hermes_Gateway.vbs`) to execute the PowerShell script completely invisibly, preventing Command Prompt/PowerShell windows from flashing on your screen at Windows logon.
-2. **Smarter Coexistence with Development/MCP Tools:** Automatically runs the gateway alongside the Hermes Desktop App dashboard under normal usage, but suspends it during active Hermes installations or updates. It specifically avoids matching background MCP servers (like `mcp-obsidian` running under `uv`) to prevent false-alarm lockouts.
-3. **Self-Healing Battery-Saving Watchdog:** Checks battery levels every 15 seconds. If the laptop runs on battery and falls below **30%**, it suspends the gateway to preserve power. The monitor script stays active in the background and automatically restarts the gateway once plugged back into AC power or charged.
-4. **Stale Lock Cleanup:** Cleans up leftover lock files (`gateway.lock` / `.lock` files) from previous crashes on startup to ensure a healthy restart.
-5. **Username-Agnostic and Portable:** No hardcoded paths inside the scripts. Resolves directories relative to the executing location and environment variables.
-6. **Native Windows Toast Notifications:** Triggers native Windows notifications for key service lifecycle events (startup, low battery suspend, installer pauses, network connectivity drops, and auto-heals).
-7. **Resource Leak Watchdog:** Monitors CPU and memory usage of the running gateway process. Performs a self-healing restart if memory exceeds **500MB** or if CPU usage exceeds **85%** for over **1 minute**.
-8. **Network-Aware Reconnector:** Tests network connectivity to `api.telegram.org` before starting or monitoring the gateway to prevent endless connect/failure loops while offline.
-9. **Crash Recovery & Lock-Safe Logs:** Automatically handles crash counts with exponential backoff delays (up to 5 minutes) and rotates output streams to local `logs/` directory.
+1. **Silent Background Execution:** Uses a VBScript wrapper (`Hermes_Gateway.vbs`) to execute the PowerShell script completely invisibly, preventing Command Prompt/PowerShell windows from flashing on your screen.
+2. **Multi-Profile Support:** Dynamically manages both the `default` gateway and custom profiles (isolated under `profiles/your-profile`). Each profile runs its own watchdog and gateway process independently.
+3. **Global Suspension Switch:** Create a `.suspend` file in the service folder to stop all gateways gracefully (waiting 120 seconds to allow state saving) and pause the watchdog evaluation loops. Removing the `.suspend` file automatically resumes them.
+4. **Smarter Coexistence with Update Tools:** Automatically suspends the gateway during active installations or updates (detecting `pip`, `uv`, or setup runs) to release file locks, resuming automatically afterward.
+5. **Self-Healing Battery Monitor:** Suspends the gateway when running on battery and charge falls below **30%** (calculating average for dual-battery setups), resuming automatically when AC power is restored.
+6. **Resource Leak Watchdog:** Scans active process memory/CPU. Performs a self-healing restart if memory exceeds **500MB** or if CPU usage exceeds **85%** for over **1 minute**.
+7. **Network-Aware Reconnector:** Tests network connectivity via fallback DNS lookups to ensure the system is online before starting the gateway, preventing retry loops during offline outages.
+8. **Lock-Safe Logs:** Manages output logs safely in a local `logs/` directory using copy-and-clear logic to avoid Windows "file locked" exceptions.
+9. **MCP Server Integration:** Includes a built-in FastMCP python server (`gateway_mcp_server.py`) to manage profiles, view logs, and trigger suspensions directly from any MCP-compatible AI or IDE interface.
 
 ---
 
 ## 📂 Project Structure
 
-The project has been modernized and divided into modular helper scripts to maximize maintainability and testability:
-
-* **`Hermes_Gateway.vbs`:** The silent launcher. Executed by Windows Task Scheduler, it dynamically locates and calls the PowerShell watchdog in a hidden window style (`WindowStyle = 0`).
-* **`Hermes_Gateway_Monitor.ps1`:** The main watchdog coordinator. Integrates all modular utility scripts, executes the health loops, manages log rotation, and handles crash recovery backoffs.
-* **`LockCleanup.ps1`:** Cleans up stale lock files at startup. Safely verifies running process command lines to prevent false matches.
-* **`NetworkUtils.ps1`:** Lightweight DNS-based internet connection tests to avoid connection retries while offline.
-* **`NotificationUtils.ps1`:** Standardized WinRT assembly calls to display native Windows Toast notifications cleanly.
-* **`PowerUtils.ps1`:** Queries laptop AC power state and battery charge level.
-* **`ProcessUtils.ps1`:** Detects background installer, update, or setup runs so the watchdog can release file locks during updates.
-* **`ResourceUtils.ps1`:** Polls CPU and memory statistics for active self-healing resource monitoring.
-* **`logs/`:** Local logs directory:
-  * `gateway-stdout.log` / `gateway-stderr.log`: Current output logs.
-  * `gateway-stdout.prev.log` / `gateway-stderr.prev.log`: Saved logs from the previous launch.
+* **`Hermes_Gateway.vbs`:** Hidden VBS wrapper. Runs `Hermes_Gateway_Monitor.ps1` in windowless mode, forwarding profile arguments.
+* **`Hermes_Gateway_Monitor.ps1`:** Main watchdog coordinator. Manages process lifecycles, graceful delays, and health loops.
+* **`gateway_mcp_server.py`:** FastMCP server managing status checks, log streams, and suspension switches.
+* **`Agent.md`:** Documentation outlining the Git branching strategy.
+* **`logs/`** (Git-ignored): Stores runtime output and warning logs:
+  * `gateway-stdout.log` / `gateway-stderr.log` (Default profile)
+  * `gateway-<profile>-stdout.log` / `gateway-<profile>-stderr.log` (Custom profiles)
+* **`utils/`**: Directory containing modular PowerShell scripts:
+  * `utils/LockCleanup.ps1`: Safe stale lock resolver.
+  * `utils/NetworkUtils.ps1`: Multi-host network checking.
+  * `utils/NotificationUtils.ps1`: WinRT notification sender under the `"Custom Hermes Gateway"` identity.
+  * `utils/PowerUtils.ps1`: averages dual-battery states and AC detection.
+  * `utils/ProcessUtils.ps1`: installer/update execution scanner.
+  * `utils/ResourceUtils.ps1`: CPU and RAM metrics evaluator.
 
 ---
 
-## ⚙️ Installation / Configuration
+## ⚙️ Installation & Configuration
 
-To set this up as a Windows logon task:
-
+### 1. Watchdog Logon Task
+To configure the watchdog to run silently at user logon (using the default profile):
 1. Open **PowerShell as Administrator**.
-2. Run the following commands to configure the Task Scheduler task (`Hermes_Gateway`) to trigger our silent launcher:
+2. Run the following commands:
    ```powershell
    $action = New-ScheduledTaskAction -Execute "wscript.exe" -Argument "$env:LOCALAPPDATA\hermes\custom-gateway-service\Hermes_Gateway.vbs"
-   Set-ScheduledTask -TaskName "Hermes_Gateway" -Action $action
+   $trigger = New-ScheduledTaskTrigger -AtLogon
+   $trigger.Delay = "PT30S" # 30-second delay for network/desktop initialization
+   Register-ScheduledTask -TaskName "Hermes_Gateway" -Action $action -Trigger $trigger -Force
    ```
+*(For custom profiles, configure the task action arguments to pass your profile name: `Hermes_Gateway.vbs your-profile`)*
 
----
-
-## 🛠️ Git Version Control & Branching Strategy
-
-This repository adopts the **GitHub Flow** strategy to coordinate releases and test updates safely:
-
-* **`main`:** Contains stable, production-ready code.
-* **`development`:** Used to run, test, and polish new features before merging them into production.
-
-### Working on Changes:
-1. Make sure you are on the `development` branch to test and refine features:
-   ```bash
-   git checkout -b development
-   ```
-2. Once testing is complete and the code is verified as highly stable, merge changes back into `main` and push:
-   ```bash
-   git checkout main
-   git merge development
-   git push origin main
-   ```
+### 2. Registering the MCP Server
+To manage the gateways from Claude Desktop, add this configuration block to your `claude_desktop_config.json`:
+```json
+{
+  "mcpServers": {
+    "hermes-gateway-manager": {
+      "command": "C:\\Users\\conta\\AppData\\Local\\hermes\\hermes-agent\\venv\\Scripts\\python.exe",
+      "args": [
+        "C:\\Users\\conta\\AppData\\Local\\hermes\\custom-gateway-service\\gateway_mcp_server.py"
+      ]
+    }
+  }
+}
+```
 
 ---
 
 ## 🔧 Troubleshooting & Manual Control
 
-If you need to check on the watchdog or manually manage the gateway, use the following PowerShell commands:
-
-### Query Watchdog Process & Task Status:
+### Query Watchdog & Gateway Status:
 ```powershell
 # Get active powershell watchdog process
 Get-CimInstance Win32_Process -Filter "Name = 'powershell.exe'" | Where-Object { $_.CommandLine -like "*Hermes_Gateway_Monitor*" } | Select-Object ProcessId, CommandLine
@@ -81,46 +77,23 @@ Get-CimInstance Win32_Process -Filter "Name = 'powershell.exe'" | Where-Object {
 Get-ScheduledTask -TaskName "Hermes_Gateway" | Get-ScheduledTaskInfo
 ```
 
-### Manually Start / Stop the Watchdog:
+### Manually Start / Stop a Profile Watchdog:
 ```powershell
-# Start the hidden watchdog service
+# Start the hidden watchdog service (Default profile)
 Start-ScheduledTask -TaskName "Hermes_Gateway"
 
-# Stop the watchdog service (Note: You must also terminate the running powershell process)
-Stop-ScheduledTask -TaskName "Hermes_Gateway"
-Get-CimInstance Win32_Process -Filter "Name = 'powershell.exe'" | Where-Object { $_.CommandLine -like "*Hermes_Gateway_Monitor*" } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force }
+# Manually start a specific profile watchdog
+wscript.exe Hermes_Gateway.vbs "your-profile-name"
+
+# Stop a watchdog process and related gateway processes
+# (Or use the list_profiles/stop_gateway tools via the MCP server)
 ```
 
 ### Read Active Runtime Logs:
 ```powershell
-# View stdout log contents
-Get-Content -Path "$env:LOCALAPPDATA\hermes\custom-gateway-service\logs\gateway-stdout.log" -Tail 50 -ErrorAction SilentlyContinue
+# View default profile logs
+Get-Content -Path "logs\gateway-stderr.log" -Tail 50 -ErrorAction SilentlyContinue
 
-# View stderr log contents (contains python errors/warnings)
-Get-Content -Path "$env:LOCALAPPDATA\hermes\custom-gateway-service\logs\gateway-stderr.log" -Tail 50 -ErrorAction SilentlyContinue
+# View custom profile logs
+Get-Content -Path "logs\gateway-profileName-stderr.log" -Tail 50 -ErrorAction SilentlyContinue
 ```
-
----
-
-## 🔬 Testing Utilities Locally
-
-Each module in `utils/` is isolated and can be tested individually in a local PowerShell session:
-
-```powershell
-# Navigate to the service directory
-cd "$env:LOCALAPPDATA\hermes\custom-gateway-service"
-
-# Test Toast Notifications:
-. .\utils\NotificationUtils.ps1
-Show-Notification -Title "Test Banner" -Message "Hello from custom identity!"
-
-# Test Internet Connectivity check:
-. .\utils\NetworkUtils.ps1
-Test-InternetConnection
-
-# Test Battery levels:
-. .\utils\PowerUtils.ps1
-Get-BatteryPercent
-Test-OnACPower
-```
-
