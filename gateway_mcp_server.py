@@ -355,8 +355,16 @@ def suspend_all_gateways(token: str = None) -> str:
         except Exception:
             pass
         suspend_file.touch(exist_ok=True)
+        warning = ""
+        try:
+            running_watchdogs = get_running_watchdogs()
+            default_status = get_profile_status("default", running_watchdogs)
+            if not default_status["watchdog_running"]:
+                warning = " (Warning: The default watchdog is not currently running. The graceful countdown will not begin until it is started.)"
+        except Exception:
+            pass
         return (
-            "Suspension confirmed! Created suspension switch file. "
+            "Suspension confirmed! Created suspension switch file." + warning + " "
             "All profile gateways will be stopped gracefully by the watchdog in 120 seconds."
         )
     except Exception as e:
