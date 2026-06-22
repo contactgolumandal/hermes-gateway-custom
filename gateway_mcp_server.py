@@ -95,11 +95,14 @@ def get_profile_status(profile_name: str, running_watchdogs: dict) -> dict:
             data = json.loads(lock_file.read_text(encoding="utf-8"))
             pid = data.get("pid")
             if pid and psutil.pid_exists(pid):
-                # Verify it is a python process
+                # Verify it is a python process running the actual Hermes gateway module
                 proc = psutil.Process(pid)
                 if "python" in proc.name().lower():
-                    gateway_running = True
-                    gateway_pid = pid
+                    cmdline = proc.cmdline()
+                    cmd_str = " ".join(cmdline) if cmdline else ""
+                    if "hermes_cli.main" in cmd_str.lower():
+                        gateway_running = True
+                        gateway_pid = pid
         except Exception:
             pass
             
