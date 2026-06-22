@@ -22,6 +22,22 @@ def get_profile_dir(profile_name: str) -> Path:
         return HERMES_ROOT
     return PROFILES_DIR / profile_name
 
+def show_mcp_notification(title: str, message: str):
+    """Trigger a native Windows Toast notification using our PowerShell utility."""
+    utils_path = SERVICE_DIR / "utils" / "NotificationUtils.ps1"
+    if utils_path.exists():
+        cmd = [
+            "powershell.exe",
+            "-ExecutionPolicy", "Bypass",
+            "-WindowStyle", "Hidden",
+            "-Command",
+            f". '{utils_path}'; Show-Notification -Title '{title}' -Message '{message}'"
+        ]
+        try:
+            subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        except Exception:
+            pass
+
 def get_running_watchdogs() -> dict:
     """Find all running watchdog PowerShell processes and group them by profile."""
     # Discover custom profiles dynamically
@@ -210,7 +226,7 @@ def stop_gateway(profile_name: str) -> str:
     stopped_something = False
     msgs = []
     
-    # 1. Kill the watchdog process
+    # 1. Kill the watchdog process first to prevent it from spawning new gateways
     if status["watchdog_running"] and status["watchdog_pid"]:
         try:
             proc = psutil.Process(status["watchdog_pid"])
@@ -227,6 +243,15 @@ def stop_gateway(profile_name: str) -> str:
         
     if not stopped_something:
         return f"Gateway and watchdog for profile '{profile_name}' were not running."
+        
+    # 3. Show sequential notifications in the opposite order of startup (with a 1s delay)
+    try:
+        show_mcp_notification(f"Hermes Offline ({profile_name})", "Gateway stopped successfully.")
+        import time
+        time.sleep(1)
+        show_mcp_notification(f"Hermes Watchdog ({profile_name})", "Service stopped successfully.")
+    except Exception:
+        pass
         
     return f"Stopped gateway and watchdog for profile '{profile_name}': " + ", ".join(msgs)
 
