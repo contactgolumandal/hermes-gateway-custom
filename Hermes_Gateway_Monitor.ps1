@@ -64,8 +64,8 @@ function Stop-ProfileProcesses {
         $isMatch = $false
         if ($null -ne $cmdLine) {
             if ($ProfileName -eq "default") {
-                # Match default processes (which don't contain -p or --profile arguments)
-                if ($cmdLine -notmatch "\s-(p|-profile)\b") {
+                # Match default processes (which don't contain -p or --profile arguments, and not the MCP server itself)
+                if ($cmdLine -notmatch "\s-(p|-profile)\b" -and $cmdLine -notlike "*gateway_mcp_server.py*") {
                     $isMatch = $true
                 }
             } else {
@@ -288,7 +288,7 @@ while ($true) {
                 }
             }
         } else {
-            # Custom profiles suspend immediately (no delay)
+            # Custom profiles suspend immediately (no delay) and exit watchdog
             if ($null -ne $proc -and -not $proc.HasExited) {
                 $proc | Stop-Process -Force -ErrorAction SilentlyContinue
             }
@@ -296,10 +296,8 @@ while ($true) {
             $consecutiveCrashes = 0
             $lastLaunchTime = $null
             
-            if ($null -eq $script:lastBatteryAlertState -or -not $script:lastBatteryAlertState) {
-                Show-Notification -Title "Hermes Suspended ($ProfileName)" -Message "Gateway stopped immediately to conserve battery ($percent% left)."
-                $script:lastBatteryAlertState = $true
-            }
+            Show-Notification -Title "Hermes Suspended ($ProfileName)" -Message "Gateway and watchdog stopped immediately to conserve battery ($percent% left)."
+            exit 0
         }
         Start-Sleep -Seconds 1
         continue
@@ -310,6 +308,16 @@ while ($true) {
             $isSuspendedLowBattery = $false
             $lowBatteryStartTime = $null
             $script:lastBatteryAlertState = $false
+
+            # If this is the default profile, launch the watchdogs for the custom profiles!
+            if ($ProfileName -eq "default") {
+                foreach ($p in $customProfiles) {
+                    $vbsPath = Join-Path $PSScriptRoot "Hermes_Gateway.vbs"
+                    if (Test-Path $vbsPath) {
+                        Start-Process -FilePath "wscript.exe" -ArgumentList "`"$vbsPath`"", "`"$p`"" -NoNewWindow
+                    }
+                }
+            }
         }
     }
 

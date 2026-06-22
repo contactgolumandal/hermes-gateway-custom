@@ -23,6 +23,13 @@ def get_profile_dir(profile_name: str) -> Path:
 
 def get_running_watchdogs() -> dict:
     """Find all running watchdog PowerShell processes and group them by profile."""
+    # Discover custom profiles dynamically
+    custom_profiles = []
+    if PROFILES_DIR.exists():
+        for item in PROFILES_DIR.iterdir():
+            if item.is_dir():
+                custom_profiles.append(item.name)
+
     watchdogs = {}
     for proc in psutil.process_iter(['pid', 'name', 'cmdline']):
         try:
@@ -37,6 +44,13 @@ def get_running_watchdogs() -> dict:
                         if arg.lower() == "-profilename" and i + 1 < len(cmdline):
                             profile = cmdline[i + 1]
                             break
+                    else:
+                        # Match custom profile name in command line if named argument is missing
+                        for p in custom_profiles:
+                            pattern = rf"\b{re.escape(p)}\b"
+                            if re.search(pattern, cmd_str, re.IGNORECASE):
+                                profile = p
+                                break
                     watchdogs[profile] = {
                         "pid": proc.info['pid'],
                         "cmdline": cmdline
